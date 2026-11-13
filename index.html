@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ร้านขายของ POS</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f5f8;color:#172033;font-family:system-ui,sans-serif}header{background:#111827;color:white;padding:18px;font-size:21px;font-weight:700}main{max-width:850px;margin:auto;padding:16px}.card{background:white;padding:18px;border-radius:14px;margin:14px 0;box-shadow:0 2px 9px #0001}input,button{font:inherit;padding:12px;border-radius:9px;border:1px solid #ccd2dc;margin:4px 0}input{width:100%}button{background:#172033;color:white;cursor:pointer;border:0}button.alt{background:#e8edf4;color:#172033}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}.item{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #eee}.muted{color:#667085;font-size:14px}.total{font-size:22px;font-weight:bold;text-align:right}#reader{max-width:500px;margin:auto}.hide{display:none!important}button:disabled{opacity:.5}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+<header>ร้านขายของ · POS</header>
+<main>
+<section id="auth" class="card">
+<h2>เข้าสู่ระบบ</h2><p class="muted">ใช้บัญชีผู้ใช้ของร้านค้า</p>
+<input id="email" type="email" placeholder="อีเมล" autocomplete="username">
+<input id="pass" type="password" placeholder="รหัสผ่าน" autocomplete="current-password">
+<div class="row"><button id="login">เข้าสู่ระบบ</button><button class="alt" id="signup">สมัครบัญชี</button></div>
+<p id="authmsg" class="muted" role="status"></p>
+</section>
+<section id="app" class="hide">
+<div class="card">
+<div class="row"><div><h2>สแกนสินค้า</h2><span class="muted">เครื่องสแกน USB หรือกล้องมือถือ / iPad</span></div><button class="alt" id="logout">ออกจากระบบ</button></div>
+<input id="code" placeholder="สแกนบาร์โค้ดแล้วกด Enter" inputmode="numeric">
+<div class="row"><button id="cam">เปิดกล้องสแกน</button><button class="alt" id="stop" disabled>ปิดกล้อง</button></div>
+<div id="reader" class="hide"></div><p id="status" class="muted">พร้อมสแกน</p>
+</div>
+<div class="card"><h2>รายการสินค้า</h2><div id="cart" class="muted">ยังไม่มีสินค้า</div><p class="total" id="total">ยอดรวม ฿0.00</p><button class="alt" id="clear">ล้างรายการ</button></div>
+<div class="card"><h3>สินค้าทดสอบ</h3>
+<div class="item"><span>น้ำดื่ม 600 ml · 7 บาท</span><button class="alt quick" data-code="8850051015650">เพิ่ม</button></div>
+<div class="item"><span>มันฝรั่งทอด · 20 บาท</span><button class="alt quick" data-code="8850718801121">เพิ่ม</button></div>
+</div>
+</section>
+<p class="muted">รุ่นทดสอบ · ยังไม่รองรับการรับชำระเงินจริงหรือบันทึกยอดขาย</p>
+</main>
+<script>
+const db = window.supabase.createClient('https://wbdrqtyhskpbqximrmxn.supabase.co','sb_publishable_xcCSKJACfB8NqEyaeuAgXQ_Oo5Bc_v7');
+const $ = id => document.getElementById(id);
+let cart = {}, scanner = null, last = '', lastTime = 0;
+function sessionUI(s){$('auth').classList.toggle('hide',!!s);$('app').classList.toggle('hide',!s)}
+function render(){let out='',sum=0;Object.values(cart).forEach(p=>{sum+=Number(p.selling_price)*p.qty;out+='<div class="item"><span>'+p.product_name+' × '+p.qty+'</span><b>฿'+(Number(p.selling_price)*p.qty).toFixed(2)+'</b></div>'});$('cart').innerHTML=out||'ยังไม่มีสินค้า';$('total').textContent='ยอดรวม ฿'+sum.toFixed(2)}
+async function lookup(v){v=String(v||'').trim();if(!v)return;const t=Date.now();if(v===last&&t-lastTime<1200)return;last=v;lastTime=t;$('status').textContent='กำลังค้นหา '+v;const {data,error}=await db.from('products').select('barcode,product_name,selling_price,unit,is_active').eq('barcode',v).eq('is_active',true).maybeSingle();if(error){$('status').textContent='ค้นหาไม่สำเร็จ: '+error.message;return}if(!data){$('status').textContent='ไม่พบสินค้า '+v;return}cart[v]=cart[v]||{...data,qty:0};cart[v].qty++;render();$('status').textContent='เพิ่ม '+data.product_name+' แล้ว'}
+$('login').onclick=async()=>{const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('pass').value});$('authmsg').textContent=error?error.message:'เข้าสู่ระบบสำเร็จ';if(!error){const {data}=await db.auth.getSession();sessionUI(data.session)}};
+$('signup').onclick=async()=>{const {data,error}=await db.auth.signUp({email:$('email').value.trim(),password:$('pass').value});$('authmsg').textContent=error?error.message:(data.session?'สมัครสำเร็จ':'สมัครแล้ว กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชีก่อนเข้าสู่ระบบ')};
+$('logout').onclick=async()=>{if(scanner)await stopCam();await db.auth.signOut();cart={};render();sessionUI(null)};
+$('code').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value;e.target.value='';lookup(v)}};
+document.querySelectorAll('.quick').forEach(b=>b.onclick=()=>lookup(b.dataset.code));
+$('clear').onclick=()=>{cart={};render()};
+async function stopCam(){if(scanner){try{if(scanner.isScanning)await scanner.stop();scanner.clear()}catch(e){}scanner=null}$('reader').classList.add('hide');$('cam').disabled=false;$('stop').disabled=true}
+$('cam').onclick=async()=>{if(!window.Html5Qrcode){$('status').textContent='โหลดตัวอ่านกล้องไม่สำเร็จ';return}$('reader').classList.remove('hide');scanner=new Html5Qrcode('reader');$('cam').disabled=true;$('stop').disabled=false;try{await scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:260,height:150},formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13,Html5QrcodeSupportedFormats.EAN_8,Html5QrcodeSupportedFormats.UPC_A,Html5QrcodeSupportedFormats.CODE_128]},txt=>lookup(txt),()=>{});$('status').textContent='กล้องพร้อมสแกน'}catch(e){$('status').textContent='เปิดกล้องไม่ได้ กรุณาอนุญาตใช้กล้องและเปิดผ่าน HTTPS';await stopCam()}};
+$('stop').onclick=stopCam;
+db.auth.getSession().then(({data})=>sessionUI(data.session));
+db.auth.onAuthStateChange((_e,s)=>sessionUI(s));
+</script>
+</body></html>
