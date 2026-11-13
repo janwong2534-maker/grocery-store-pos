@@ -24,7 +24,7 @@
 <section id="app" class="hide">
 <div class="card">
 <div class="row"><div><h2>สแกนสินค้า</h2><span class="muted">เครื่องสแกน USB หรือกล้องมือถือ / iPad</span></div><button class="alt" id="logout">ออกจากระบบ</button></div>
-<input id="code" placeholder="สแกนบาร์โค้ดแล้วกด Enter" inputmode="numeric">
+<label for="code">ช่องรับบาร์โค้ด (Bluetooth Scanner / กล้อง)</label><input id="code" type="text" placeholder="แตะช่องนี้ แล้วสแกนบาร์โค้ด" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false">
 <div class="row"><button id="cam">เปิดกล้องสแกน</button><button class="alt" id="stop" disabled>ปิดกล้อง</button></div>
 <div id="reader" class="hide"></div><p id="status" class="muted">พร้อมสแกน</p>
 </div>
@@ -41,7 +41,7 @@
 const db = window.supabase.createClient('https://wbdrqtyhskpbqximrmxn.supabase.co','sb_publishable_xcCSKJACfB8NqEyaeuAgXQ_Oo5Bc_v7');
 const $ = id => document.getElementById(id);
 let cart = {}, scanner = null, last = '', lastTime = 0, audioCtx = null;
-function sessionUI(s){$('auth').classList.toggle('hide',!!s);$('app').classList.toggle('hide',!s)}
+function sessionUI(s){$('auth').classList.toggle('hide',!!s);$('app').classList.toggle('hide',!s);if(s)setTimeout(()=>$('code').focus(),350)}
 function totalAmount(){return Object.values(cart).reduce((s,p)=>s+Number(p.selling_price)*p.qty,0)}
 function render(){let out='';Object.entries(cart).forEach(([code,p])=>{out+='<div class="cartline"><div class="item"><span>'+p.product_name+' × '+p.qty+'<br><small>฿'+Number(p.selling_price).toFixed(2)+' / ชิ้น</small></span><div class="row" style="align-items:center;justify-content:flex-end"><button class="alt qtyminus" data-code="'+code+'" aria-label="ลดจำนวน">−</button><b>฿'+(Number(p.selling_price)*p.qty).toFixed(2)+'</b><button class="alt qtyplus" data-code="'+code+'" aria-label="เพิ่มจำนวน">+</button></div></div><div style="display:flex;justify-content:flex-end;padding:0 0 10px"><button class="alt qtyremove" data-code="'+code+'" aria-label="ลบรายการนี้">ลบรายการนี้</button></div></div>'});$('cart').innerHTML=out||'ยังไม่มีสินค้า';document.querySelectorAll('.qtyplus').forEach(b=>b.onclick=()=>{const p=cart[b.dataset.code];if(p){p.qty++;render()}});document.querySelectorAll('.qtyminus').forEach(b=>b.onclick=()=>{const p=cart[b.dataset.code];if(p){p.qty--;if(p.qty<=0)delete cart[b.dataset.code];render()}});document.querySelectorAll('.qtyremove').forEach(b=>b.onclick=()=>{delete cart[b.dataset.code];render();$('status').textContent='นำสินค้าออกจากรายการแล้ว'});const sum=totalAmount();$('total').textContent='ยอดรวม ฿'+sum.toFixed(2);$('billtotal').textContent='ยอดที่ต้องชำระ ฿'+sum.toFixed(2);updateChange()}
 function updateChange(){const sum=totalAmount(),paid=Number($('received').value)||0;$('change').textContent='เงินทอน ฿'+Math.max(0,paid-sum).toFixed(2)}
@@ -52,7 +52,8 @@ $('signup').onclick=async()=>{const email=$('email').value.trim(),password=$('pa
 $('forgot').onclick=async()=>{const email=$('email').value.trim();if(!email){$('authmsg').textContent='กรุณากรอกอีเมลก่อนกดลืมรหัสผ่าน';return}const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});$('authmsg').textContent=error?'ส่งลิงก์ตั้งรหัสผ่านไม่สำเร็จ: '+error.message:'หากอีเมลนี้มีบัญชี ระบบจะส่งลิงก์ตั้งรหัสผ่านไปให้ กรุณาตรวจสอบกล่องจดหมายและ Junk/Spam'};
 $('savepass').onclick=async()=>{const password=$('newpass').value;if(password.length<6){$('authmsg').textContent='รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';return}const {error}=await db.auth.updateUser({password});$('authmsg').textContent=error?'เปลี่ยนรหัสผ่านไม่สำเร็จ: '+error.message:'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่';if(!error){$('recoverbox').classList.add('hide');$('newpass').value=''}};
 $('logout').onclick=async()=>{if(scanner)await stopCam();await db.auth.signOut();cart={};render();sessionUI(null)};
-$('code').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value;e.target.value='';lookup(v)}};
+$('code').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const v=e.target.value.trim();e.target.value='';if(v)lookup(v);setTimeout(()=>$('code').focus(),100)}};
+$('code').addEventListener('change',e=>{const v=e.target.value.trim();if(v){e.target.value='';lookup(v);setTimeout(()=>$('code').focus(),100)}});
 document.querySelectorAll('.quick').forEach(b=>b.onclick=()=>lookup(b.dataset.code));
 $('clear').onclick=()=>{cart={};$('billstatus').textContent='';$('received').value='';render()};
 $('received').oninput=updateChange;
