@@ -119,7 +119,43 @@ function render(){let out='';Object.entries(cart).forEach(([code,p])=>{out+='<di
 function updateChange(){const sum=totalAmount(),paid=Number($('received').value)||0;$('change').textContent='เงินทอน ฿'+Math.max(0,paid-sum).toFixed(2)}
 function beep(){try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;audioCtx=audioCtx||new AC();if(audioCtx.state==='suspended')audioCtx.resume();const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();osc.type='sine';osc.frequency.value=880;gain.gain.setValueAtTime(0.18,audioCtx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.13);osc.connect(gain);gain.connect(audioCtx.destination);osc.start();osc.stop(audioCtx.currentTime+0.14)}catch(e){}}
 let scanInProgress=false;
-async function lookup(v){v=String(v??'').trim();if(!v||scanInProgress)return;const raw=v,normalized=v.replace(/[^0-9a-z]/gi,'').toUpperCase();if(!normalized)return;const t=Date.now();if(normalized===last&&t-lastTime<1600)return;scanInProgress=true;$('status').textContent='อ่านรหัส '+raw+' · กำลังค้นหาสินค้า';try{let product=null;if(navigator.onLine){const exact=await db.from('products').select('id,barcode,product_name,selling_price,unit,is_active,current_stock').eq('barcode',raw).eq('is_active',true).maybeSingle();if(exact.error)throw exact.error;product=exact.data;if(!product){const all=await localProducts();product=all.find(p=>String(p.barcode||'').replace(/[^0-9a-z]/gi,'').toUpperCase()===normalized)}}else{const all=await localProducts();product=all.find(p=>String(p.barcode||'').replace(/[^0-9a-z]/gi,'').toUpperCase()===normalized)}}catch(e){const all=await localProducts();product=all.find(p=>String(p.barcode||'').replace(/[^0-9a-z]/gi,'').toUpperCase()===normalized);if(!product)throw e}if(!product){$('status').textContent='อ่านบาร์โค้ดได้ '+raw+' แต่ไม่พบสินค้าในข้อมูลที่บันทึกไว้ กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่ออัปเดตสินค้า';return}const key=String(product.barcode);cart[key]=cart[key]||{...product,qty:0};cart[key].qty++;last=normalized;lastTime=Date.now();render();$('status').textContent='เพิ่ม '+product.product_name+' × '+cart[key].qty+' แล้ว'+(navigator.onLine?'':' · โหมดออฟไลน์');beep()}catch(err){$('status').textContent='ค้นหาสินค้าไม่สำเร็จ: '+(err?.message||String(err))}finally{scanInProgress=false}}
+async function lookup(v){
+ v=String(v??'').trim();
+ if(!v||scanInProgress)return;
+ const raw=v,normalized=v.replace(/[^0-9a-z]/gi,'').toUpperCase();
+ if(!normalized)return;
+ const t=Date.now();
+ if(normalized===last&&t-lastTime<1600)return;
+ scanInProgress=true;
+ $('status').textContent='อ่านรหัส '+raw+' · กำลังค้นหาสินค้า';
+ try{
+  let product=null;
+  if(navigator.onLine){
+   const exact=await db.from('products').select('id,barcode,product_name,selling_price,unit,is_active,current_stock').eq('barcode',raw).eq('is_active',true).maybeSingle();
+   if(exact.error)throw exact.error;
+   product=exact.data;
+  }
+  if(!product){
+   const all=await localProducts();
+   product=all.find(p=>String(p.barcode||'').replace(/[^0-9a-z]/gi,'').toUpperCase()===normalized);
+  }
+  if(!product){
+   $('status').textContent='อ่านบาร์โค้ดได้ '+raw+' แต่ไม่พบสินค้าในข้อมูลที่บันทึกไว้';
+   return;
+  }
+  const key=String(product.barcode);
+  cart[key]=cart[key]||{...product,qty:0};
+  cart[key].qty++;
+  last=normalized;lastTime=Date.now();
+  render();
+  $('status').textContent='เพิ่ม '+product.product_name+' × '+cart[key].qty+' แล้ว'+(navigator.onLine?'':' · โหมดออฟไลน์');
+  beep();
+ }catch(err){
+  $('status').textContent='ค้นหาสินค้าไม่สำเร็จ: '+(err?.message||String(err));
+ }finally{
+  scanInProgress=false;
+ }
+}
 const passField=$('pass'),passToggle=$('togglePass');passToggle.addEventListener('click',()=>{const show=passField.type==='password';passField.type=show?'text':'password';passToggle.setAttribute('aria-pressed',String(show));passToggle.setAttribute('aria-label',show?'ซ่อนรหัสผ่าน':'แสดงรหัสผ่าน');passToggle.title=show?'ซ่อนรหัสผ่าน':'แสดงรหัสผ่าน';$('eyeIcon').innerHTML=show?'<path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a15.7 15.7 0 0 1-3.1 3.8"/><path d="M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10 10 0 0 0 4-.8"/>' : '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>'});
 $('login').onclick=async()=>{const btn=$('login'),email=$('email').value.trim(),password=$('pass').value;if(!email||!password){$('authmsg').textContent='กรุณากรอกอีเมลและรหัสผ่าน';return}if(!navigator.onLine){$('authmsg').textContent='การเข้าสู่ระบบต้องใช้อินเทอร์เน็ต กรุณาเชื่อมต่อแล้วลองใหม่';return}btn.disabled=true;btn.textContent='กำลังเข้าสู่ระบบ...';$('authmsg').textContent='กำลังตรวจสอบบัญชี';try{const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;if(!data?.session||!data?.user){const current=await db.auth.getSession();if(current.error)throw current.error;if(!current.data?.session)throw new Error('ยืนยันตัวตนไม่สำเร็จ กรุณาลองใหม่')}const current=await db.auth.getSession();if(current.error)throw current.error;if(!current.data?.session)throw new Error('เข้าสู่ระบบแล้วแต่ไม่พบเซสชัน กรุณาลองใหม่');sessionUI(current.data.session);$('authmsg').textContent='เข้าสู่ระบบสำเร็จ'}catch(e){const m=e?.message||String(e);$('authmsg').textContent=/invalid login credentials/i.test(m)?'อีเมลหรือรหัสผ่านไม่ถูกต้อง':/email not confirmed/i.test(m)?'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ':/failed to fetch|network|load failed/i.test(m)?'เชื่อมต่อระบบไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต':('เข้าสู่ระบบไม่สำเร็จ: '+m)}finally{btn.disabled=false;btn.textContent='เข้าสู่ระบบ'}};
 $('signup').onclick=async()=>{const email=$('email').value.trim(),password=$('pass').value;if(!email||!password){$('authmsg').textContent='กรุณากรอกอีเมลและรหัสผ่าน';return}const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin+window.location.pathname}});$('authmsg').textContent=error?(error.message.includes('already registered')?'อีเมลนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบหรือกดลืมรหัสผ่าน':error.message):(data.session?'สมัครสำเร็จ':'ส่งอีเมลยืนยันแล้ว กรุณาเปิดอีเมลเพื่อยืนยันบัญชี')};
